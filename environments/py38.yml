@@ -1,0 +1,23 @@
+name: py38
+channels:
+  - defaults
+  - pypi
+  - conda-forge
+  - bioconda
+dependencies:
+  - jupyter_contrib_nbextensions
+  - pyserial
+  - scikit-image
+  - simpleitk
+  - scipy
+  - python=3.8
+  - matplotlib
+  - notebook==6.3.0
+  - jupyterlab==3.0.14
+  - pandas
+  - numpy
+  - seaborn
+  - statannotations
+  - statannot
+  - uncertainties
+

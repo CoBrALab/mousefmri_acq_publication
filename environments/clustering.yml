@@ -1,0 +1,18 @@
+name: clustering
+channels:
+  - defaults
+  - pypi
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.8.8
+  - scikit-learn==1.3.0
+  - multiprocess==0.70.12.2
+  - nibabel==3.2.1
+  - pandas==1.2.4
+  - nilearn
+  - matplotlib==3.3.4
+  - jupyter
+  - scikit-learn-extra
+  - seaborn
+
