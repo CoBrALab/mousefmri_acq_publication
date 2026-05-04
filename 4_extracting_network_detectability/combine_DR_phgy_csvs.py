@@ -14,10 +14,9 @@ How Dice, correlation and fit variance relate, and how the somatomotor and dmn n
 
 import numpy as np
 import glob
-import pandas as pd
+import pandas as pd # type: ignore
 import os
-import sys
-import seaborn as sns
+import seaborn as sns  # type: ignore
 import matplotlib.pyplot as plt
 from scipy import stats
 
@@ -78,17 +77,17 @@ def combine_dr_phgy_csvs(phgy_csvs, dr_csvs, dataset_specs, output_name):
     df_all_subs.to_csv(output_name + '.csv')
     print('Original number of timepoints: '  + str(df_all_subs.shape))
 
-    #drop rows containing nans or too few timepoints (<70)
-    df_all_subs = df_all_subs.dropna(axis = 0)
-    print('Number of timepoints after dropping nans: ' + str(df_all_subs.shape))
-    df_all_subs = df_all_subs[df_all_subs['Number of Timepoints'] > 80]
-    print('Number of timepoints fter dropping windows with <80 timepoints: ' + str(df_all_subs.shape))
+    #drop rows containing too few timepoints (<80)
+    df_all_subs_postdrop = df_all_subs[df_all_subs['Number of Timepoints'] > 80]
+    df_all_subs_toofewtimepoints = df_all_subs[df_all_subs['Number of Timepoints'] <= 80]
+    print('Number of timepoints after dropping windows with <80 timepoints: ' + str(df_all_subs_postdrop.shape))
 
-    df_all_subs.to_csv(output_name + '_sparse.csv')
-    return df_all_subs
+    df_all_subs_postdrop.to_csv(output_name + '_sparse.csv')
+    df_all_subs_toofewtimepoints.to_csv(output_name + '_dropped_timepoints.csv')
+    return df_all_subs, df_all_subs_postdrop
 
-df_all_subs_censoredtomean = combine_dr_phgy_csvs(phgy_files, epi_dr_window_csvs, dataset_specs_df, './master_DR_and_phgy_window')
-df_all_subs_variableLength = combine_dr_phgy_csvs(phgy_files, epi_dr_window_variableLength_csvs, dataset_specs_df, './master_DR_and_phgy_variableWindow')
+df_all_subs_censored_tomean_beforedropshort, df_all_subs_censoredtomean = combine_dr_phgy_csvs(phgy_files, epi_dr_window_csvs, dataset_specs_df, './intermediary_outputs_sanity_check/master_DR_and_phgy_window')
+df_all_subs_variableLength_beforedropshort, df_all_subs_variableLength = combine_dr_phgy_csvs(phgy_files, epi_dr_window_variableLength_csvs, dataset_specs_df, './intermediary_outputs_sanity_check/master_DR_and_phgy_variableWindow')
 
 #####################################plot the relationship between different types of DR metrics ####################################
 fig, axs = plt.subplots(3, 3, figsize=(16, 16), sharey = True)
@@ -161,14 +160,30 @@ sns.histplot(data=np.abs(cap_df), x='Corr-networkAvg', kde=True, color='gray', a
 axs[i+1].set_ylabel('Number of timepoints')
 axs[i+1].set_xlabel('CAP - average correlation to network')
 fig3.savefig('./final_outputs/figures/DR_correlation_histograms.svg')
+
+######################### plot histogram of window lengths ###############################
+sns.set(style="ticks", font_scale = 2)
+fig4, axs = plt.subplots(1, 2, figsize=(16, 10), sharey = False)
+sns.histplot(data=df_all_subs_variableLength_beforedropshort, x='Number of Timepoints', stat = 'proportion', ax=axs[0], binwidth = 5)
+axs[0].set_ylabel('Number of 2-min windows')
+axs[0].set_xlabel('Number of timepoints in window')
+axs[0].set_title('Original')
+axs[0].set_xlim([0,120])
+
+sns.histplot(data=df_all_subs_variableLength, x='Number of Timepoints', ax=axs[1], stat = 'proportion', binwidth = 5)
+axs[1].set_ylabel('Number of 2-min windows')
+axs[1].set_xlabel('Number of timepoints in window')
+axs[1].set_title('Data included in analysis')
+axs[1].set_xlim([80,120])
+fig4.savefig('./final_outputs/figures/histogram_timepoints_per_window.svg')
 ######################### relationship between somatomotor and dmn ##########################################
 
-fig4, axs = plt.subplots(1, 1, figsize=(10, 10))
+fig5, axs = plt.subplots(1, 1, figsize=(10, 10))
 myplot = plt.scatter(df_all_subs_variableLength['Correlation Somatomotor'],
                  df_all_subs_variableLength['Correlation DMN'], c = df_all_subs_variableLength['Average correlation to network'] )
 plt.xlabel('Somatomotor correlation')
 plt.ylabel('DMN correlation')
 cbar = plt.colorbar(myplot)
 
-fig4.savefig('./final_outputs/figures/DR_somat-dmn_corr.png')
+fig5.savefig('./final_outputs/figures/DR_somat-dmn_corr.png')
 

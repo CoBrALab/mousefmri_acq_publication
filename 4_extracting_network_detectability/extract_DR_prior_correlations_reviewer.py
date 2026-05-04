@@ -1,21 +1,17 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # Goal: extract DR values in non-overlapping 2min windows. Also extract avg phgy metrics in same window.
+# run in py38 env
+# # This script is added to address reviewer comments. It computes avg phgy data within 2-min windows WITHOUT phgy censoring.
+# # this will allow me to look at relationship between phgy and fmri censoring since the two are not removed simultaneously
 ##PROBLEM NEED CPP dataset_zscore and sklearn csvs
 import dual_regression_functions
 import numpy as np
 import glob
-import rabies.preprocess_pkg.utils
 import pandas as pd
 import os
 import pickle
 import sys
-
-# import functions for dual ICA from rabies
-from rabies.analysis_pkg.data_diagnosis import resample_IC_file
-from rabies.analysis_pkg.analysis_functions import closed_form
-from rabies.analysis_pkg.prior_modeling import _logcosh
 
 #extract sub_ses_id
 sub_ses_ID=str(sys.argv[1])
@@ -28,8 +24,6 @@ final_data_folder='/data/chamal/projects/mila/2021_fMRI_dev/part2_phgy_fmri_proj
 spatial_prior_IC_files = "../../1_reference_data/local_data/melodic_IC_resampled_to_local_data.nii.gz"
 dataset_info_df = pd.read_csv("../../2_raw_data/dataset_specs.csv").set_index("epi_filename")
 epi_files_local = sorted(glob.glob(final_data_folder + '/rabies_out_cc-v050_05smoothed_lowpass/confound_correction_datasink/cleaned_timeseries/*/*rest*'))
-commonspace_template_file_local = os.path.abspath(final_data_folder + '/rabies_out_preprocess-v050/bold_datasink/commonspace_resampled_template/resampled_template.nii.gz')
-commonspace_mask_file_local = os.path.abspath(final_data_folder + '/rabies_out_preprocess-v050/bold_datasink/commonspace_mask/_scan_info_subject_idPHG001.session1_split_name_sub-PHG001_ses-1_acq-RARE_T2w/_run_1/sub-PHG001_ses-1_task-rest_acq-EPI_run-1_bold_RAS_EPI_brain_mask.nii.gz')
 
 #load the phgy derivatives and FD data too
 final_phgy_data_folder='../../4_derivatives/phgy_derivatives/physiology_analysis_outputs'
@@ -42,8 +36,7 @@ CPP_sexstrainzscore_df = pd.read_csv(os.path.abspath('../CPP_analysis/final_outp
 CPP_sexstrainzscore_sklearn_df = pd.read_csv(os.path.abspath('../CPP_analysis/intermediary_outputs_for_sanity_check/CPP_metrics_5clust_sexstrain_zscore_sklearn.csv'))
 
 #censoring dict that contains fmri, phgy and nan censoring
-fmri_phgy_nan_censoring_dict = pickle.load(open('../../4_derivatives/final_phgy_censored/pickle_files/dict_fmri_phgy_nan_censor', "rb"))
-phgy_nan_censoring_dict = pickle.load(open('../../4_derivatives/final_phgy_censored/pickle_files/dict_phgy_nan_censor', "rb"))
+fmri_nan_censoring_dict = pickle.load(open('../../4_derivatives/final_phgy_censored/pickle_files/dict_fmri_nan_censor', "rb"))
 
 #extract details about the specfic session from the dataset_info_df and find the right files
 session_info  = dataset_info_df.loc[sub_ses_ID, :]
@@ -62,10 +55,7 @@ indices_CPP_sexstrain_thisScan= np.where(CPP_sexstrainzscore_df['index'] == sub_
 CPP_sexstrainzscore_thisScan_df = CPP_sexstrainzscore_df.loc[indices_CPP_sexstrain_thisScan][['corr_to_clust0', 'corr_to_clust1', 'corr_to_clust2', 'corr_to_clust3', 'corr_to_clust4', 'cluster_prediction' ,'RR', 'RRV', 'RV', 'HR', 'HRV', 'PVI', 'SpO2']]
 CPP_sexstrainzscore_sklearn_thisScan_df = CPP_sexstrainzscore_sklearn_df.loc[indices_CPP_sexstrain_thisScan][['dist_to_clust0', 'dist_to_clust1', 'dist_to_clust2', 'dist_to_clust3', 'dist_to_clust4', 'cluster_prediction']]
 #convert csv to df
-censoring_df_1440length= fmri_phgy_nan_censoring_dict[sub_ses_ID].to_frame(name = "False = Masked Frames").reset_index()
-censoring_df_afterFmriCensoringLength= phgy_nan_censoring_dict[sub_ses_ID].to_frame(name = "False = Masked Frames").reset_index()
-
-prior_mask_param_arr = np.array([[0.01, False, 0], [0.01, False, 0], [0.01, True, 0.005]])
+censoring_df_1440length= fmri_nan_censoring_dict[sub_ses_ID].to_frame(name = "False = Masked Frames").reset_index()
 
 #print status
 print('Processing file: ' + str(os.path.basename(epi_file)) + ' out of ' + str(len(epi_files_local)) + ' files, of length: ' + str(np.sum(censoring_df_1440length)[1]))
@@ -76,22 +66,7 @@ print('FD file is: ' + str(os.path.basename(rabies_FD_csv)))
 print('CPP datasetzscore data has length ' + str(len(indices_CPP_dataset_thisScan)))
 print('CPP sexstrain zscore data has length ' + str(len(indices_CPP_sexstrain_thisScan)))
 
-#run the DR in time window
-
-dual_regression_functions.perform_indiv_fit_window_multiprior(epi_file, censoring_df_1440length, censoring_df_afterFmriCensoringLength, commonspace_mask_file_local,
-                                                            commonspace_template_file_local, spatial_prior_IC_files,[5,12,19],
-                                                            prior_mask_param_arr, 1440, 120, 0, session_info, session_info_columns, 
-                                                            columns_to_copy, 1, 
-                                                            "./intermediary_outputs_sanity_check/DR_outputs/DR_outputs_censoredToMean_" + sub_ses_ID, 
-                                                            "./intermediary_outputs_sanity_check/DR_outputs_censoredToMean_niftis/DR_outputs_censoredToMean_niftis" + sub_ses_ID, True)
-dual_regression_functions.perform_indiv_fit_window_multiprior(epi_file, censoring_df_1440length, censoring_df_afterFmriCensoringLength, commonspace_mask_file_local,
-                                                            commonspace_template_file_local, spatial_prior_IC_files,[5,12,19],
-                                                            prior_mask_param_arr, 1440, 120, 0, session_info, session_info_columns, 
-                                                            columns_to_copy, 1, 
-                                                            "./intermediary_outputs_sanity_check/DR_outputs_variableWindows/DR_outputs_variableWindows_" + sub_ses_ID, 
-                                                            "./intermediary_outputs_sanity_check/DR_outputs_variableWindows_niftis/DR_outputs_variableWindows_niftis_" + sub_ses_ID, False)
-
 #calculate the phgy metrics in the same time window
 dual_regression_functions.extract_phgy_in_window(resp_df, pulseox_df, spo2_df, rabies_FD_df, CPP_datasetzscore_thisScan_df, CPP_sexstrainzscore_thisScan_df, CPP_sexstrainzscore_sklearn_thisScan_df, censoring_df_1440length,
                                                     1440, 120, 0,  session_info,
-                                                    "./intermediary_outputs_sanity_check/phgy_windowAvg_outputs/" + sub_ses_ID, True)
+                                                    "./intermediary_outputs_sanity_check/phgy_windowAvg_outputs_nophgycensored/" + sub_ses_ID, True)
