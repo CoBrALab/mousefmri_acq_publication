@@ -186,11 +186,6 @@ pathc_lm = lm(network_detectability ~   strain + isoflurane_percent + sex +dex_c
                    data = df_scaled)
 relimp_c <-calc.relimp(pathc_lm, type = c('lmg'), rela = FALSE)
 
-#redo but with interaction terms
-total_path_lm_interac = lm(network_detectability ~  RR..mean.in.window + RRV..mean.in.window + RV..mean.in.window + HR..mean.in.window +PVI..mean.in.window + HRV..mean.in.window + SpO2..mean.in.window + Mean.FD..mean.in.window + strain*isoflurane_percent + sex*isoflurane_percent + strain*dex_conc + sex*dex_conc + actual_ses_order + Time.after.isoflurane.change,
-                           data = df_scaled)
-relimp_interac <-calc.relimp(total_path_lm_interac, type = c('lmg'), rela = FALSE)
-
 
 regressors <-c('isoflurane', 'dexmedetomidine', 'session', 'RR', 'RRV', 'RV', 'HR', 'PVI', 'HRV', 'SpO2', 'mean FD', 'strain', 'sex', 'time after isoflurane change')
 LMG <-round(relimp@lmg*100,1)
@@ -198,7 +193,7 @@ first<-round(relimp@first*100,1)
 last<-round(relimp@last*100,1)
 relimp_tibble <-tibble(regressors, LMG, first, last) |>
   arrange(factor(regressors, levels = c('strain', 'sex', 'session', 'isoflurane', 'dexmedetomidine', 'time after isoflurane change', "RR", "RRV", "RV", "HR", "HRV", "PVI", "SpO2", "mean FD"))) %>%
-  add_row(regressors = 'total instantaneous', LMG = 14.7, first = 23.4, last = 4.6) 
+  add_row(regressors = 'total instantaneous', LMG = 14.7, first = 26.0, last = 9.0) 
   
 relimp_table <- gt(relimp_tibble)|>
   tab_header(
@@ -245,12 +240,7 @@ relimp_table <- gt(relimp_tibble)|>
 relimp_table
 gtsave(relimp_table, "./variance_explained_tables/nd_r2_table.png")
 
-
-#I could do bootstrapping to get confidence intervals, but the results are too messy
-bootresults<-boot.relimp(total_path_lm_interac, b=1000, sort = TRUE) 
-ci<-booteval.relimp(bootresults, norank=T)
-ci
-plot(ci)
+######################### physiology ##########################3
 
 rr_lm = lm(RR..mean.in.window ~ strain*isoflurane_percent + sex*isoflurane_percent + strain*dex_conc + sex*dex_conc + actual_ses_order + Time.after.isoflurane.change,
                    data = df_scaled)
