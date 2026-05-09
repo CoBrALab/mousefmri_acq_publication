@@ -21,7 +21,7 @@ library(webshot2)
 #the purpose of this script is to use brms to formally run the mediation analysis and generate the tables in the paper supplementary that
 # indicate effect sizes and confidence intervals for both direct and indirect paths.
 
-#load CAP and CPP outputs
+#load DR outputs
 DR_df=read.csv('../DR_analysis-to_extract_network_detectability/final_outputs/master_DR_and_phgy_variableWindow_sparse.csv')
 #fisherz
 DR_df$Average.correlation.to.network.fisherz <- psych::fisherz(DR_df$Average.correlation.to.network)
@@ -131,7 +131,7 @@ patha_effects_table <- gt(patha_effects_tibble %>%
                             dplyr::select(`mediator_var_list3..iter..`, `indep_var_list2...iter_i..9....1..`, Estimate, CI.Lower, CI.Upper, Star)%>%
                             dplyr::mutate(across(where(is.numeric), round, 3)))%>%
   tab_header(
-    title = md("Table S1: Dependence of mediators (physiology, motion) on independent variables (demographics, anesthesia, session, time)"),
+    title = md("Table S3: Dependence of mediators (physiology, motion) on independent variables (demographics, anesthesia, session, time)"),
     subtitle = "Path A of mediation analysis"
   ) %>%
   cols_label(
@@ -165,8 +165,8 @@ gtsave(patha_effects_table, "./mediation_stats_tables/patha_effects_table.png")
 ######################### path c (total)
 pathc_effects_tibble <- read.table('./mediation_stats_tables/pathctotal_outputs_noquadratic.txt', header = TRUE, stringsAsFactors = FALSE) %>%
   mutate(Star = case_when(
-    lowerCI < 0 & upperCI <=0 ~ '*',
-    lowerCI >=0 & upperCI > 0 ~ '*',
+    lowerCI < 0 & upperCI < 0 ~ '*',
+    lowerCI > 0 & upperCI > 0 ~ '*',
     lowerCI <=0 & upperCI >= 0 ~ ''
   )) %>%
   slice(-1)
@@ -178,7 +178,7 @@ pathc_effects_table <- gt(pathc_effects_tibble %>%
                             dplyr::select(`Predictors`, Estimate, lowerCI, upperCI, Star)%>%
                             dplyr::mutate(across(where(is.numeric), round, 3)))%>%
   tab_header(
-    title = md("Table S2: Dependence of network detectability on independent variables"),
+    title = md("Table S4: Dependence of network detectability on independent variables"),
     subtitle = "Path C of the mediation analysis"
   ) %>%
   cols_label(
@@ -202,7 +202,7 @@ gtsave(pathc_effects_table, "./mediation_stats_tables/pathctotal_effects_table.p
 pathb_effects_tibble <- read.table('./mediation_stats_tables/pathb_outputs_noquadratic.txt', header = TRUE, stringsAsFactors = FALSE) %>%
   mutate(Star = case_when(
     lowerCI < 0 & upperCI <0 ~ '*',
-    lowerCI >=0 & upperCI > 0 ~ '*',
+    lowerCI > 0 & upperCI > 0 ~ '*',
     lowerCI <=0 & upperCI >= 0 ~ ''
   )) %>%
   slice(-1)
@@ -213,7 +213,7 @@ pathb_effects_table <- gt(pathb_effects_tibble %>%
                             dplyr::select(`Predictors`, Estimate, lowerCI, upperCI, Star)%>%
                             dplyr::mutate(across(where(is.numeric), round, 3)))%>%
   tab_header(
-    title = md("Table S4: Mediator (instantaneous) variables that are predictive of network detectability above and beyond the independent variables."),
+    title = md("Table S6: Mediator (instantaneous) variables that are predictive of network detectability above and beyond the independent variables."),
     subtitle = "Path B of the mediation analysis"
   ) %>%
   cols_label(
@@ -258,7 +258,7 @@ pathcprime_effects_table <- gt(pathcprime_effects_tibble %>%
                                  dplyr::select(`indep_var_list2_full..iter_i..`, Estimate, CI.Lower, CI.Upper, Star)%>%
                                  dplyr::mutate(across(where(is.numeric), round, 3)))%>%
   tab_header(
-    title = md("Table S3: Dependence of network detectability on independent variables while controlling for mediator variables"),
+    title = md("Table S5: Dependence of network detectability on independent variables while controlling for mediator variables"),
     subtitle = "Path C' of the mediation analysis"
   ) %>%
   cols_label(
@@ -315,7 +315,7 @@ indirect_effects_table <- gt(med_indirect_effects_tibble %>%
                                dplyr::select(`mediator_var_list3..iter..`, `indep_var_list2...iter_i..9....1..`, Estimate, CI.Lower, CI.Upper, Star) %>%
                                dplyr::mutate(across(where(is.numeric), round, 3))) %>%
   tab_header(
-    title = md("Table S5: Identifying mediators between independent variables and network detectability"),
+    title = md("Table S7: Identifying mediators between independent variables and network detectability"),
     subtitle = "Path C - Path C' (i.e. total-direct effects)"
   ) %>%
   cols_label(
