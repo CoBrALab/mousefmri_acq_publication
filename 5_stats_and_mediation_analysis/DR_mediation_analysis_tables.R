@@ -108,6 +108,18 @@ hypothesis(med, "networkdetectability_dex_conc2M1  = 0")
 hypothesis(med, "networkdetectability_dex_conc3M2  = 0")
 hypothesis(med, "networkdetectability_Time.after.isoflurane.change  = 0")
 
+# extract rhat and tail ESS for all parameters from the main model
+convergence_df <- as.data.frame(summary(med)$fixed) %>%
+  rownames_to_column("param") %>%
+  dplyr::select(param, Rhat, Tail_ESS)
+
+# also get random effects convergence
+convergence_re <- as.data.frame(summary(med)$random$subject_ID) %>%
+  rownames_to_column("param") %>%
+  dplyr::select(param, Rhat, Tail_ESS)
+
+convergence_all <- bind_rows(convergence_df, convergence_re)
+
 ##################################path a
 
 #print path a effects
@@ -119,13 +131,16 @@ for (m in mediator_var_list) {
     expression <- paste(i_on_m,' = 0', sep = ' ')
     patha_effect <-hypothesis(med, expression)
     print(patha_effect$hypothesis)
+    conv_row <- convergence_all %>% filter(param == i_on_m) %>% #filter out the right Rhat, ESS values
     if ((iter == 1) & (iter_i == 0)) {
-      patha_effects_tibble<-tibble(mediator_var_list3[[iter]], indep_var_list2[[(iter_i%%9)+1]], patha_effect$hypothesis)
+      patha_effects_tibble<-tibble(mediator_var_list3[[iter]], indep_var_list2[[(iter_i%%9)+1]], patha_effect$hypothesis,
+                                    Rhat = conv_row$Rhat,Tail_ESS = conv_row$Tail_ESS)
     }
     else {
       #add a row if we're not on the first
       patha_effects_tibble <- patha_effects_tibble |>
-        add_row(mediator_var_list3[[iter]], indep_var_list2[[(iter_i%%9)+1]], patha_effect$hypothesis)
+        add_row(mediator_var_list3[[iter]], indep_var_list2[[(iter_i%%9)+1]], patha_effect$hypothesis,
+                Rhat = conv_row$Rhat,Tail_ESS = conv_row$Tail_ESS)
     }
     iter_i = iter_i +1
   }
@@ -139,8 +154,10 @@ patha_effects_tibble <- read.csv('./mediation_stats_tables/patha_effects.csv')
 summary(patha_effects_tibble)
 
 patha_effects_table <- gt(patha_effects_tibble %>% 
-                            dplyr::select(`mediator_var_list3..iter..`, `indep_var_list2...iter_i..9....1..`, Estimate, CI.Lower, CI.Upper, Star)%>%
-                            dplyr::mutate(across(where(is.numeric), round, 3)))%>%
+                            dplyr::select(`mediator_var_list3..iter..`, `indep_var_list2...iter_i..9....1..`, Estimate, Difference, CI.Lower, CI.Upper, Star, Rhat, Tail_ESS) %>%
+                            dplyr::mutate(across(c(Estimate, Difference, CI.Lower, CI.Upper), round, 3))) %>%
+  fmt_number(columns = Rhat, decimals = 2) %>%
+  fmt_number(columns = Tail_ESS, decimals = 0) %>%
   tab_header(
     title = md("Table S3: Dependence of mediators (physiology, motion) on independent variables (demographics, anesthesia, session, time)"),
     subtitle = "Path A of mediation analysis"
@@ -149,9 +166,12 @@ patha_effects_table <- gt(patha_effects_tibble %>%
     `mediator_var_list3..iter..` = md("**Mediator Variable**"),
     `indep_var_list2...iter_i..9....1..` = md("**Independent Variable**"),
     Estimate = md("**Effect estimate (standardized)**"),
-    CI.Lower = md("**Confidence Interval (lower)**"),
-    CI.Upper = md("**Confidence Interval (upper)**"),
-    Star = md("**Significant?**")
+    Difference = md("**Effect Difference (Updated-original)**"),
+    CI.Lower = md("**Credible interval (lower)**"),
+    CI.Upper = md("**Credible interval (upper)**"),
+    Star = md("**Significant?**"),
+    Rhat = md("**Rhat**"),          
+    Tail_ESS = md("**Tail ESS**") 
   )%>%
   cols_align(align = 'center') %>%
   tab_options(column_labels.background.color = "darkgray") %>%
@@ -168,7 +188,7 @@ patha_effects_table <- gt(patha_effects_tibble %>%
     style = cell_fill(color = "lightgray"),
     locations = cells_body(rows = mediator_var_list3..iter.. == 'MeanFD')) %>%
   tab_source_note(
-    source_note = md("The effect of independent variables on mediator variables, modeled as a linear mixed effects regression using Bayesian statistics. All mediator variables are continuous and standardized to a mean of 0 and standard deviation of 1. Thus the effect estimate indicates the mean difference in the mediator variable (eg RR) when comparing the two contrasts (e.g. two strains), expressed in units of standard deviation. The 95% confidence intervals indicate the lowest and highest esimates for the effect size. If the confidence interval crosses 0, then the effect is not significant."))
+    source_note = md("The effect of independent variables on mediator variables, modeled as a linear mixed effects regression using Bayesian statistics. All mediator variables are continuous and standardized to a mean of 0 and standard deviation of 1. Thus the effect estimate indicates the mean difference in the mediator variable (eg RR) when comparing the two contrasts (e.g. two strains), expressed in units of standard deviation. The 95% credible intervals indicate the lowest and highest esimates for the effect size. Rhat values at or near 1.00, and effective sample size (ESS) in the thousands are indicative of successful chain convergence."))
 patha_effects_table
 
 gtsave(patha_effects_table, "./mediation_stats_tables/patha_effects_table.png")
@@ -186,8 +206,10 @@ pathc_effects_tibble$Predictors <- indep_var_list2_full
 
 
 pathc_effects_table <- gt(pathc_effects_tibble %>% 
-                            dplyr::select(`Predictors`, Estimate, lowerCI, upperCI, Star)%>%
+                            dplyr::select(`Predictors`, Estimate, Difference, lowerCI, upperCI, Star, Rhat, Tail_ESS)%>%
                             dplyr::mutate(across(where(is.numeric), round, 3)))%>%
+  fmt_number(columns = Rhat, decimals = 2) %>%
+  fmt_number(columns = Tail_ESS, decimals = 0) %>%
   tab_header(
     title = md("Table S4: Dependence of network detectability on independent variables"),
     subtitle = "Path C of the mediation analysis"
@@ -195,15 +217,17 @@ pathc_effects_table <- gt(pathc_effects_tibble %>%
   cols_label(
     `Predictors` = md("**Independent Variable**"),
     Estimate = md("**Effect estimate**"),
-    lowerCI = md("**Confidence Interval (lower)**"),
-    upperCI = md("**Confidence Interval (upper)**"),
-    Star = md("**Significant?**")
+    Difference = md("**Effect Difference (Updated-original)**"),
+    lowerCI = md("**Credible interval (lower)**"),
+    upperCI = md("**Credible interval (upper)**"),
+    Star = md("**Significant?**"),
+    Rhat = md("**Rhat**"),          
+    Tail_ESS = md("**Tail ESS**")    
   )%>%
   cols_align(align = 'center') %>%
   tab_options(column_labels.background.color = "darkgray")%>%
-  #gt_split(row_every_n = 22) %>%
   tab_source_note(
-    source_note = md("The total effects of independent variables on network detectability, modeled as a linear mixed effects regression using Bayesian statistics. Network detectability is a spatial correlation that was Fisher-Z and log transformed. Thus the effect estimate indicates the mean difference in network detectability when comparing the two contrasts (e.g. two strains), expressed in units of log correlations. The 95% confidence intervals indicate the lowest and highest esimates for the effect size. If the confidence interval crosses 0, then the effect is not significant."))
+    source_note = md("The total effects of independent variables on network detectability, modeled as a linear mixed effects regression using Bayesian statistics. Network detectability is a spatial correlation that was Fisher-Z and log transformed. Thus the effect estimate indicates the mean difference in network detectability when comparing the two contrasts (e.g. two strains), expressed in units of log correlations. The 95% credible intervals indicate the lowest and highest esimates for the effect size. Rhat values at or near 1.00, and effective sample size (ESS) in the thousands are indicative of successful chain convergence."))
 
 pathc_effects_table
 gtsave(pathc_effects_table, "./mediation_stats_tables/pathctotal_effects_table.png")
@@ -221,8 +245,10 @@ pathb_effects_tibble$Predictors <- mediator_var_list3
 
 
 pathb_effects_table <- gt(pathb_effects_tibble %>% 
-                            dplyr::select(`Predictors`, Estimate, lowerCI, upperCI, Star)%>%
+                            dplyr::select(`Predictors`, Estimate, lowerCI, upperCI, Star, Rhat, Tail_ESS)%>%
                             dplyr::mutate(across(where(is.numeric), round, 3)))%>%
+  fmt_number(columns = Rhat, decimals = 2) %>%
+  fmt_number(columns = Tail_ESS, decimals = 0) %>%
   tab_header(
     title = md("Table S6: Mediator (instantaneous) variables that are predictive of network detectability above and beyond the independent variables."),
     subtitle = "Path B of the mediation analysis"
@@ -230,15 +256,16 @@ pathb_effects_table <- gt(pathb_effects_tibble %>%
   cols_label(
     `Predictors` = md("**Mediator Variable**"),
     Estimate = md("**Effect estimate**"),
-    lowerCI = md("**Confidence Interval (lower)**"),
-    upperCI = md("**Confidence Interval (upper)**"),
-    Star = md("**Significant?**")
+    lowerCI = md("**Credible interval (lower)**"),
+    upperCI = md("**Credible interval (upper)**"),
+    Star = md("**Significant?**"),
+    Rhat = md("**Rhat**"),       
+    Tail_ESS = md("**Tail ESS**")    
   )%>%
   cols_align(align = 'center') %>%
   tab_options(column_labels.background.color = "darkgray")%>%
-  #gt_split(row_every_n = 22) %>%
   tab_source_note(
-    source_note = md("The effects of mediator variables on network detectability when controlling for independent variables, modeled as a linear mixed effects regression using Bayesian statistics. Network detectability is a spatial correlation that was Fisher-Z and log transformed. The 95% confidence intervals indicate the lowest and highest esimates for the effect size. If the confidence interval crosses 0, then the effect is not significant."))
+    source_note = md("The effects of mediator variables on network detectability when controlling for independent variables, modeled as a linear mixed effects regression using Bayesian statistics. Network detectability is a spatial correlation that was Fisher-Z and log transformed. The 95% credible intervals indicate the lowest and highest esimates for the effect size. Rhat values at or near 1.00, and effective sample size (ESS) in the thousands are indicative of successful chain convergence."))
 
 pathb_effects_table
 gtsave(pathb_effects_table, "./mediation_stats_tables/pathb_effects_table.png")
@@ -251,13 +278,15 @@ for (i in indep_var_list_full) {
   expression <- paste(i_on_y, ' = 0', sep = ' ')
   pathc_effect <- hypothesis(med, expression)
   print(pathc_effect$hypothesis)
+  conv_row <- convergence_all %>% filter(param == i_on_y) %>% #filter out the right Rhat, ESS values
   if (iter_i == 1){
-    pathcprime_effects_tibble<-tibble(indep_var_list2_full[[iter_i]], pathc_effect$hypothesis)
+    pathcprime_effects_tibble<-tibble(indep_var_list2_full[[iter_i]], pathc_effect$hypothesis,
+                                      Rhat = conv_row$Rhat,Tail_ESS = conv_row$Tail_ESS)
   }
   else {
     #add a row if we're not on the first
     pathcprime_effects_tibble <- pathcprime_effects_tibble |>
-      add_row(indep_var_list2_full[[iter_i]], pathc_effect$hypothesis)
+      add_row(indep_var_list2_full[[iter_i]], pathc_effect$hypothesis, Rhat = conv_row$Rhat,Tail_ESS = conv_row$Tail_ESS)
   }
   iter_i = iter_i + 1
 }
@@ -266,8 +295,10 @@ write.csv(pathcprime_effects_tibble, "./mediation_stats_tables/pathcprime_effect
 #format as a table, selecting only the rows of interest
 pathcprime_effects_tibble <- read.csv('./mediation_stats_tables/pathcprime_effects.csv')
 pathcprime_effects_table <- gt(pathcprime_effects_tibble %>% 
-                                 dplyr::select(`indep_var_list2_full..iter_i..`, Estimate, CI.Lower, CI.Upper, Star)%>%
-                                 dplyr::mutate(across(where(is.numeric), round, 3)))%>%
+                                 dplyr::select(`indep_var_list2_full..iter_i..`, Estimate, CI.Lower, CI.Upper, Star, Rhat, Tail_ESS)%>%
+                                 dplyr::mutate(across(where(is.numeric), round, 2)))%>%
+  fmt_number(columns = Rhat, decimals = 2) %>%
+  fmt_number(columns = Tail_ESS, decimals = 0) %>%                               
   tab_header(
     title = md("Table S5: Dependence of network detectability on independent variables while controlling for mediator variables"),
     subtitle = "Path C' of the mediation analysis"
@@ -275,15 +306,16 @@ pathcprime_effects_table <- gt(pathcprime_effects_tibble %>%
   cols_label(
     `indep_var_list2_full..iter_i..` = md("**Independent Variable**"),
     Estimate = md("**Effect estimate**"),
-    CI.Lower = md("**Confidence Interval (lower)**"),
-    CI.Upper = md("**Confidence Interval (upper)**"),
-    Star = md("**Significant?**")
+    CI.Lower = md("**Credible interval (lower)**"),
+    CI.Upper = md("**Credible interval (upper)**"),
+    Star = md("**Significant?**"),
+    Rhat = md("**Rhat**"),          
+    Tail_ESS = md("**Tail ESS**")
   )%>%
   cols_align(align = 'center') %>%
   tab_options(column_labels.background.color = "darkgray")%>%
-  #gt_split(row_every_n = 22) %>%
   tab_source_note(
-    source_note = md("The direct effects of independent variables on network detectability obtained when controlling for all mediator variables, modeled as a linear mixed effects regression using Bayesian statistics. Network detectability is a spatial correlation that was Fisher-Z and log transformed. Thus the effect estimate indicates the mean difference in network detectability when comparing the two contrasts (e.g. two strains), expressed in units of log correlations. The 95% confidence intervals indicate the lowest and highest esimates for the effect size. If the confidence interval crosses 0, then the effect is not significant."))
+    source_note = md("The direct effects of independent variables on network detectability obtained when controlling for all mediator variables, modeled as a linear mixed effects regression using Bayesian statistics. Network detectability is a spatial correlation that was Fisher-Z and log transformed. Thus the effect estimate indicates the mean difference in network detectability when comparing the two contrasts (e.g. two strains), expressed in units of log correlations. The 95% credible intervals indicate the lowest and highest esimates for the effect size. Rhat values at or near 1.00, and effective sample size (ESS) in the thousands are indicative of successful chain convergence."))
 
 pathcprime_effects_table
 gtsave(pathcprime_effects_table, "./mediation_stats_tables/pathcprime_effects_table.png")
@@ -353,7 +385,7 @@ indirect_effects_table <- gt(med_indirect_effects_tibble %>%
     style = cell_fill(color = "lightgray"),
     locations = cells_body(rows = mediator_var_list3..iter.. == 'MeanFD')) %>%
   tab_source_note(
-    source_note = md("The determination of which mediator variables are significant mediators of the relationship between independent variables and network detectability. This indicates that the independent variables have an indirect effect on network detectability through these mediator variables. The effect sizes are the difference between the total and direct effects. 95% confidence intervals indicate the lowest and highest esimates for the effect size. If the confidence interval crosses 0, then the effect is not significant."))
+    source_note = md("The determination of which mediator variables are significant mediators of the relationship between independent variables and network detectability. This indicates that the independent variables have an indirect effect on network detectability through these mediator variables. The effect sizes are the difference between the total and direct effects. The 95% credible intervals indicate the lowest and highest esimates for the effect size. Convergence diagnostics (Rhat and Tail ESS) are not shown for indirect effects as they are derived quantities (products of path a and path b coefficients) rather than direct model parameters; refer to Tables S3 and S6 for the convergence diagnostics of those paths."))
 
 indirect_effects_table
 gtsave(indirect_effects_table, "./mediation_stats_tables/indirect_effects_table.png")
