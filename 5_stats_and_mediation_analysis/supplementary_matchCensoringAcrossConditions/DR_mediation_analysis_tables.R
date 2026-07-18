@@ -120,6 +120,17 @@ df_scaled <-df %>%
 
 #define and run the model
 set.seed(123)
+normal_priors <- c(
+  prior(normal(0, 1), class = b, resp = "RRmeaninwindow"),
+  prior(normal(0, 1), class = b, resp = "RRVmeaninwindow"),
+  prior(normal(0, 1), class = b, resp = "RVmeaninwindow"),
+  prior(normal(0, 1), class = b, resp = "HRmeaninwindow"),
+  prior(normal(0, 1), class = b, resp = "HRVmeaninwindow"),
+  prior(normal(0, 1), class = b, resp = "PVImeaninwindow"),
+  prior(normal(0, 1), class = b, resp = "SpO2meaninwindow"),
+  prior(normal(0, 1), class = b, resp = "MeanFDmeaninwindow"),
+  prior(normal(0, 1), class = b, resp = "networkdetectability")
+)
 f1 <- bf(RR..mean.in.window ~  strain*isoflurane_percent + sex*isoflurane_percent + strain*dex_conc + sex*dex_conc + actual_ses_order + Time.after.isoflurane.change + (1|subject_ID))
 f2 <- bf(RRV..mean.in.window ~  strain*isoflurane_percent + sex*isoflurane_percent + strain*dex_conc + sex*dex_conc + actual_ses_order + Time.after.isoflurane.change + (1|subject_ID))
 f5 <- bf(RV..mean.in.window ~  strain*isoflurane_percent + sex*isoflurane_percent + strain*dex_conc + sex*dex_conc + actual_ses_order + Time.after.isoflurane.change + (1|subject_ID))
@@ -129,7 +140,7 @@ f8 <- bf(PVI..mean.in.window ~  strain*isoflurane_percent + sex*isoflurane_perce
 f10 <- bf(SpO2..mean.in.window ~  strain*isoflurane_percent + sex*isoflurane_percent + strain*dex_conc + sex*dex_conc + actual_ses_order + Time.after.isoflurane.change + (1|subject_ID))
 f11 <- bf(Mean.FD..mean.in.window ~  strain*isoflurane_percent + sex*isoflurane_percent + strain*dex_conc + sex*dex_conc + actual_ses_order + Time.after.isoflurane.change + (1|subject_ID))
 f12 <- bf(network_detectability ~ RR..mean.in.window + RRV..mean.in.window + RV..mean.in.window + HR..mean.in.window + PVI..mean.in.window + HRV..mean.in.window + SpO2..mean.in.window + Mean.FD..mean.in.window + strain*isoflurane_percent + sex*isoflurane_percent + strain*dex_conc + sex*dex_conc + actual_ses_order + Time.after.isoflurane.change + (1|subject_ID))
-med <- brm(f1 + f2 + f5 + f6 + f7 + f8+ f10 + f11 + f12 + set_rescor(FALSE), data = df_scaled, refresh = 0)
+med <- brm(f1 + f2 + f5 + f6 + f7 + f8+ f10 + f11 + f12 + set_rescor(FALSE), data = df_scaled, prior = normal_priors,  refresh = 0)
 
 #second model for path c and b - copy paste the outputs into a .txt (still need to be manually edited)
 medc <- brm(network_detectability ~ strain + sex + isoflurane_percent + dex_conc + actual_ses_order + Time.after.isoflurane.change + strain:isoflurane_percent + isoflurane_percent:sex + strain:dex_conc + sex:dex_conc + (1|subject_ID), data = df_scaled, refresh = 0)
