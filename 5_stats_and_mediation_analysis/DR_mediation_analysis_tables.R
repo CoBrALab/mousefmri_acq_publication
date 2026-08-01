@@ -24,7 +24,7 @@ library(webshot2)
 #load DR outputs
 DR_df=read.csv('../DR_analysis-to_extract_network_detectability/final_outputs/master_DR_and_phgy_variableWindow_sparse.csv')
 #fisherz
-DR_df$Average.correlation.to.network.fisherz <- psych::fisherz(DR_df$Average.correlation.to.network)
+DR_df$Average.correlation.to.network.fisherz <- log(psych::fisherz(DR_df$Average.correlation.to.network))
 
 #set sub, sex and strain as factors. Iso, dex and session_order also need to be set as factors in order to be recoded later.
 DR_df$subject_ID<- as.factor(DR_df$subject_ID)
@@ -88,6 +88,10 @@ med <- brm(f1 + f2 + f5 + f6 + f7 + f8+ f10 + f11 + f12 + set_rescor(FALSE), dat
 medc <- brm(network_detectability ~ strain + sex + isoflurane_percent +  + dex_conc + actual_ses_order + Time.after.isoflurane.change + strain:isoflurane_percent + isoflurane_percent:sex + strain:dex_conc + sex:dex_conc + (1|subject_ID), data = df_scaled, refresh = 0)
 medb <- brm(network_detectability ~ RR..mean.in.window + RRV..mean.in.window + RV..mean.in.window + HR..mean.in.window + PVI..mean.in.window + HRV..mean.in.window + SpO2..mean.in.window + Mean.FD..mean.in.window + strain + sex + isoflurane_percent + dex_conc + actual_ses_order + Time.after.isoflurane.change + strain:isoflurane_percent + isoflurane_percent:sex + strain:dex_conc + sex:dex_conc + (1|subject_ID), data = df_scaled, refresh = 0)
 
+#explicitly count the number of divergent transitions
+sum(subset(nuts_params(med), Parameter == "divergent__")$Value)
+sum(subset(nuts_params(medc), Parameter == "divergent__")$Value)
+sum(subset(nuts_params(medb), Parameter == "divergent__")$Value)
 #########################################################create tables of results
 mediator_var_list <- list('RR..mean.in.window', 'RRV..mean.in.window', 'RV..mean.in.window', 'HR..mean.in.window', 'PVI..mean.in.window', 'HRV..mean.in.window', 'SpO2..mean.in.window', 'Mean.FD..mean.in.window')
 mediator_var_list2 <- list('RRmeaninwindow',  'RRVmeaninwindow', 'RVmeaninwindow', 'HRmeaninwindow', 'PVImeaninwindow', 'HRVmeaninwindow', 'SpO2meaninwindow', 'MeanFDmeaninwindow')
