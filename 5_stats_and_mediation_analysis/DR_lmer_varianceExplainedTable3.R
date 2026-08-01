@@ -89,19 +89,57 @@ lmg_total_path <- get_lmg_with_ci(total_path_lm, './total_path_be.rds', c("lmg",
 print('bootstrap total path interac')
 total_path_lm_interac = lm(network_detectability ~  RR..mean.in.window + RRV..mean.in.window + RV..mean.in.window + HR..mean.in.window +PVI..mean.in.window + HRV..mean.in.window + SpO2..mean.in.window + Mean.FD..mean.in.window + strain*isoflurane_percent + sex*isoflurane_percent + strain*dex_conc + sex*dex_conc + actual_ses_order + Time.after.isoflurane.change,
                            data = df_scaled)
+lmg_total_path_interac <- get_lmg_with_ci(total_path_lm_interac, './total_path_be_interac_p.rds')
 
-###################### save as png ##################################3
+###################### print R2 of total instantaneous and subject ############
+#total instantaneous - 'first' metric is computed by taking R2 of only the instantaneous variables
+total_inst_first = lm(network_detectability ~  RR..mean.in.window + RRV..mean.in.window + RV..mean.in.window + HR..mean.in.window +PVI..mean.in.window + HRV..mean.in.window + SpO2..mean.in.window + Mean.FD..mean.in.window,
+                  data = df_scaled)
+print(summary(total_inst_first))
+print(summary(total_inst_first)$r.squared) 
+
+#total instantaneous - 'last' metric is computed by subtracting non-instantaneous metrics from the entire model
+total_noninst = lm(network_detectability ~  actual_ses_order + Time.after.isoflurane.change + strain*isoflurane_percent + sex*isoflurane_percent + strain*dex_conc + sex*dex_conc,
+                  data = df_scaled)
+print(summary(total_path_lm_interac)$r.squared - summary(total_noninst)$r.squared) 
+
+#subject effect - compute the variance explained by random effect of subject by now fitting an lmer and subtract marginal (fixed) effect from conditional (Total)
+total_path_lmer_interac = lmer(network_detectability ~  RR..mean.in.window + RRV..mean.in.window + RV..mean.in.window + HR..mean.in.window +PVI..mean.in.window + HRV..mean.in.window + SpO2..mean.in.window + Mean.FD..mean.in.window + strain*isoflurane_percent + sex*isoflurane_percent + strain*dex_conc + sex*dex_conc + actual_ses_order + Time.after.isoflurane.change + (1|subject_ID),
+                           data = df_scaled)
+r2_vals <- performance::r2_nakagawa(total_path_lmer_interac)
+random_effect_r2 <- r2_vals$R2_conditional - r2_vals$R2_marginal
+print(random_effect_r2) 
+
+###################### save as png ##################################
+#load model output from file
 be_total_path <- readRDS(file = './total_path_be.rds')
 
+#load interaction model output from file and reformat the confidence intervals again 
+be_total_path_interac <- readRDS(file = './total_path_be_interac_p.rds')
+boot_lmg_point <- be_total_path_interac@lmg * 100
+lower <- be_total_path_interac$lmg.lower * 100
+upper <- be_total_path_interac$lmg.upper * 100
+lmg_total_path_interac = sprintf("%.1f (%.1f-%.1f)", boot_lmg_point, lower, upper)
 
-regressors <-c('isoflurane', 'dexmedetomidine', 'session', 'RR', 'RRV', 'RV', 'HR', 'PVI', 'HRV', 'SpO2', 'mean FD', 'strain', 'sex', 'time after isoflurane change')
-LMG <-lmg_total_path #this is modified during reviews, used to be relimp instead of relimp_interac
-first<-as.character(round(be_total_path@first*100,1))
-last<-as.character(round(be_total_path@last*100,1))
-relimp_tibble <-tibble(regressors, LMG, first, last) |>
-  arrange(factor(regressors, levels = c('strain', 'sex', 'session', 'isoflurane', 'dexmedetomidine', 'time after isoflurane change', "RR", "RRV", "RV", "HR", "HRV", "PVI", "SpO2", "mean FD"))) %>%
-  add_row(regressors = 'total instantaneous', LMG = '15.7', first = '26', last = '9') 
-write.csv(relimp_tibble, "./nd_r2_ci2.csv")
+#build vectors to feed into tibble
+regressors <-c('isoflurane', 'dexmedetomidine', 'session', 'strain:isoflurane', 'sex:isoflurane', "strain:dexmedetomidine", "sex:dexmedetomidine", 'RR', 'RRV', 'RV', 'HR', 'PVI', 'HRV', 'SpO2', 'mean FD', 'strain', 'sex', 'time after isoflurane change')
+LMG <-lmg_total_path_interac 
+first <- character(18) #predefine first to be an empty vector of size 18 (total num of regressors)
+last  <- character(18) #same for as above
+first[c(1:3, 8:18)] <- as.character(round(be_total_path@first * 100, 1)) #fill the elements which are defined (all but the interaction terms)
+last[c(1:3, 8:18)]  <- as.character(round(be_total_path@last  * 100, 1))
+subject_row <- tibble(regressors = 'subject (random effect)', LMG = sprintf("%.1f", random_effect_r2 * 100), first = '', last = '')
+
+
+relimp_tibble <- tibble(regressors, LMG, first, last) |>
+  arrange(factor(regressors, levels = c('strain', 'sex', 'session', 'isoflurane', 'dexmedetomidine', 'time after isoflurane change', 'strain:isoflurane', 'sex:isoflurane', "strain:dexmedetomidine", "sex:dexmedetomidine", "RR", "RRV", "RV", "HR", "HRV", "PVI", "SpO2", "mean FD")))
+relimp_tibble <- bind_rows(
+  relimp_tibble[1:10, ],      # main effects + interactions
+  subject_row,                 # subject 
+  relimp_tibble[11:18, ]       # instantaneous variables
+) %>%
+  add_row(regressors = 'total instantaneous', LMG = '15.7', first = '26', last = '11')
+write.csv(relimp_tibble, "./nd_r2_ci.csv")
 
 relimp_table <- gt(relimp_tibble)|>
   fmt_markdown(columns = everything()
@@ -119,15 +157,15 @@ relimp_table <- gt(relimp_tibble)|>
   cols_align(align = 'left') |>
   tab_options(column_labels.background.color = "darkgray")|>
   tab_source_note(
-    source_note = md("The variance explained (R^2^) by a regressor is calculated as: the increase in model R^2^ when that regressor is added to the model. This value depends on the order in which that regressor is added to the model, thus we present 3 approachs. LMG is the average R^2^ across all orderings, confidence intervals estimated by bootstrapping are in brackets. 'First' is when that regressor is added first. 'Last' is when that regressor is added last. Values were computed with the relaimpo package (Groemping, 2007). Interaction terms and random effects are not shown as their 'first' and 'last' contribution cannot be calculated with the package.")
+    source_note = md("The variance explained (R^2^) by a regressor is calculated as: the increase in model R^2^ when that regressor is added to the model. This value depends on the order in which that regressor is added to the model, thus we present 3 approachs. LMG is the average R^2^ across all orderings, confidence intervals estimated by bootstrapping are in brackets. 'First' is when that regressor is added first. 'Last' is when that regressor is added last. The LMG values were computed on the full model (including interaction terms and random effects) whereas the 'first' and 'last' metrics were computed after excluding interaction terms and random effects from the model, as the metrics are not relevant for these terms. Values were computed with the relaimpo package (Groemping, 2007). ")
     )|>
-  tab_row_group(
+tab_row_group(
     label = "independent variables",
-    rows = 1:6
+    rows = 1:11
   )|>
   tab_row_group(
     label = "instantaneous variables",
-    rows = 7:15
+    rows = 12:20
   ) |>
   tab_style(
     style = cell_fill(color = "lightyellow"),
@@ -135,7 +173,7 @@ relimp_table <- gt(relimp_tibble)|>
   ) |>
   tab_style(
     style = cell_fill(color = "lightyellow"),
-    locations = cells_body(columns = first, rows = c(15))
+    locations = cells_body(columns = first, rows = c(20))
   ) |>
   row_group_order(groups = c('independent variables', "instantaneous variables")
                   )|>
@@ -148,7 +186,4 @@ relimp_table <- gt(relimp_tibble)|>
     locations = cells_row_groups(groups = 2)
   )
 relimp_table
-gtsave(relimp_table, "./nd_r2_table_ci2.png")
-
-
-
+gtsave(relimp_table, "./nd_r2_table_ci.png")
